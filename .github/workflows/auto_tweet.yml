@@ -1,0 +1,73 @@
+name: 🤖 X 自動投稿
+
+on:
+  # ─────────────────────────────────────────
+  # 定時実行（UTC時間）
+  # 日本時間に換算: UTC + 9時間
+  #   UTC 0:00 → JST 9:00
+  #   UTC 3:00 → JST 12:00
+  #   UTC 12:00 → JST 21:00
+  # ─────────────────────────────────────────
+  schedule:
+    - cron: "0 0 * * *"   # 毎日 JST 9:00
+    - cron: "0 3 * * *"   # 毎日 JST 12:00
+    - cron: "0 12 * * *"  # 毎日 JST 21:00
+
+  # 手動実行（デバッグ用）
+  workflow_dispatch:
+
+jobs:
+  post-tweet:
+    runs-on: ubuntu-latest
+    # posts.json への書き込み権限が必要
+    permissions:
+      contents: write
+
+    steps:
+      # ─────────────────────────────────────────
+      # 1. リポジトリをチェックアウト
+      # ─────────────────────────────────────────
+      - name: 📥 リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          # BOTのコミットにも対してトリガーが走らないよう明示
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ─────────────────────────────────────────
+      # 2. Python セットアップ
+      # ─────────────────────────────────────────
+      - name: 🐍 Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ─────────────────────────────────────────
+      # 3. 依存パッケージをインストール
+      # ─────────────────────────────────────────
+      - name: 📦 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      # ─────────────────────────────────────────
+      # 4. 自動投稿スクリプトを実行
+      # ─────────────────────────────────────────
+      - name: 🚀 自動投稿を実行
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_TOKEN_SECRET: ${{ secrets.TWITTER_ACCESS_TOKEN_SECRET }}
+          TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
+        run: python post_tweet.py
+
+      # ─────────────────────────────────────────
+      # 5. 更新した posts.json をコミット・プッシュ
+      # ─────────────────────────────────────────
+      - name: 💾 posts.json の変更をコミット
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add posts.json logs/
+          # 差分がある場合のみコミット
+          git diff --cached --quiet || git commit -m "chore: 自動投稿完了 [skip ci]"
+          git push
